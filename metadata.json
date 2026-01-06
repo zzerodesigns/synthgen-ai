@@ -1,0 +1,7 @@
+{
+  "name": "SynthGen AI",
+  "description": "Design procedural sound effects or clone existing audio files into Web Audio API code using Gemini AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
