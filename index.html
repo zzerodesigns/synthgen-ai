@@ -878,7 +878,7 @@ osc.stop(ctx.currentTime + 2.1);`;
 
                         <div className="w-1/4 flex flex-col items-end gap-1">
                             <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                                v2.0.4 // <span className="text-[#33ccff]">ONLINE</span>
+                                v2.0.5 // <span className="text-[#33ccff]">ONLINE</span>
                             </div>
                         </div>
                     </header>
@@ -1146,6 +1146,20 @@ osc.stop(ctx.currentTime + 2.1);`;
                                     <div className="text-[10px] font-mono text-slate-400 p-3 bg-black/20 border border-slate-800 rounded leading-relaxed">
                                         <span className="text-[#33ccff] font-bold">SYSTEM_MSG:</span> {explanation}
                                     </div>
+                                    <div className="mt-4 space-y-3">
+                                    <div className="text-xs font-bold text-[#33ccff] tracking-wider">AI PROMPT GENERATOR</div>
+                                    <div className="flex gap-3 h-10">
+                                        <input 
+                                            type="text" 
+                                            className="w-full bg-black/50 border border-slate-700 px-4 text-sm font-mono text-white focus:border-[#33ccff] outline-none placeholder-slate-600"
+                                            placeholder="e.g. 'Retro laser jump'"
+                                            value={userPrompt}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleTextGen()}
+                                            onChange={e => setUserPrompt(e.target.value)}
+                                        />
+                                        <button onClick={handleTextGen} disabled={isLoading} className="cyber-btn px-6 text-sm font-bold">GEN</button>
+                                    </div>
+                                </div>
                                 </div>
                                 <div className="h-12 border-t border-white/5 bg-black/20 flex items-center pr-2">
                                     <input 
