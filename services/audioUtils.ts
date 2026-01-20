@@ -21,6 +21,13 @@ export const getMasterGain = (): GainNode => {
   return masterGain;
 };
 
+export const setMasterVolume = (val: number) => {
+  const ctx = getAudioContext();
+  const master = getMasterGain();
+  // Smooth transition to avoid clicks
+  master.gain.setTargetAtTime(val, ctx.currentTime, 0.1);
+};
+
 export const getAnalyser = (): AnalyserNode => {
   const ctx = getAudioContext();
   const master = getMasterGain();

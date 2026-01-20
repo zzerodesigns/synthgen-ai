@@ -1,27 +1,31 @@
-import { GoogleGenAI, SchemaType, Type } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { GeneratedCode } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Switched to Flash for faster inference as requested
+const MODEL_ID = "gemini-3-flash-preview";
 
 export const generateSynthCodeFromAudio = async (base64Audio: string, mimeType: string): Promise<GeneratedCode> => {
-  const modelId = "gemini-3-pro-preview"; // Using pro for better coding capability
-
   const systemInstruction = `
-    You are an expert Web Audio API and Audio Synthesis engineer.
-    Your task is to analyze an audio file and write a JavaScript function to reproduce that sound procedurally using the Web Audio API.
+    You are an expert Audio DSP Engineer.
+    Return ONLY valid JSON. Structure:
+    {
+        "code": "function body string (no signature)",
+        "explanation": "concise technical summary",
+        "soundDescription": "short creative name"
+    }
+    The code is the BODY of: function playEffect(ctx, destination) { ... }
+    Use 'ctx' (AudioContext), connect to 'destination'. Clean up nodes using stop() or garbage collection.
     
-    Requirements:
-    1. The code MUST be a single function named 'playEffect(ctx, destination)'.
-    2. 'ctx' is the AudioContext, 'destination' is the target node (like a Master Gain).
-    3. Use ONLY standard Web Audio API nodes (OscillatorNode, GainNode, BiquadFilterNode, AudioBufferSourceNode for noise).
-    4. DO NOT load external audio files. If noise is needed, generate a white/pink noise buffer programmatically within the function.
-    5. Be precise with timing (envelopes) and frequency modulation to match the input sound's character (percussive, drone, chirp, etc.).
-    6. Return the response in JSON format containing the code string and a brief explanation.
+    Process:
+    1. Analyze the audio's waveform, spectrogram, and frequency content.
+    2. Reconstruct the sound using Web Audio API nodes (Oscillators, Gains, Filters, Noise).
+    3. Ensure the code runs immediately and produces sound.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: modelId,
+      model: MODEL_ID,
       contents: {
         parts: [
           {
@@ -31,7 +35,7 @@ export const generateSynthCodeFromAudio = async (base64Audio: string, mimeType: 
             },
           },
           {
-            text: "Analyze this sound and write the Web Audio API code to synthesize it."
+            text: "Analyze this audio file's characteristics (timbre, envelope, frequency content). Write a Web Audio API function body to synthesize a similar sound procedurally."
           }
         ]
       },
@@ -41,16 +45,11 @@ export const generateSynthCodeFromAudio = async (base64Audio: string, mimeType: 
         responseSchema: {
             type: Type.OBJECT,
             properties: {
-                code: {
-                    type: Type.STRING,
-                    description: "The JavaScript code for the playEffect function."
-                },
-                explanation: {
-                    type: Type.STRING,
-                    description: "A brief technical explanation of the synthesis approach."
-                }
+                code: { type: Type.STRING },
+                explanation: { type: Type.STRING },
+                soundDescription: { type: Type.STRING }
             },
-            required: ["code", "explanation"]
+            required: ["code", "explanation", "soundDescription"]
         }
       }
     });
@@ -66,23 +65,63 @@ export const generateSynthCodeFromAudio = async (base64Audio: string, mimeType: 
   }
 };
 
+export const generateSynthCodeFromText = async (description: string, currentParams?: any): Promise<GeneratedCode> => {
+  const systemInstruction = `
+    You are an expert Web Audio API Developer.
+    Return ONLY valid JSON. Structure:
+    {
+        "code": "function body string (no signature)",
+        "explanation": "concise technical summary",
+        "soundDescription": "short creative name"
+    }
+    The code is the BODY of: function playEffect(ctx, destination) { ... }
+    Use 'ctx' (AudioContext), connect to 'destination'. Clean up nodes using stop() or garbage collection.
+  `;
+
+  try {
+     const response = await ai.models.generateContent({
+       model: MODEL_ID,
+       contents: `Generate Web Audio API code to create this sound: "${description}". 
+       Consider manual synth settings if relevant: ${currentParams ? JSON.stringify(currentParams) : 'none'}`,
+       config: {
+         systemInstruction: systemInstruction,
+         responseMimeType: "application/json",
+         responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                code: { type: Type.STRING },
+                explanation: { type: Type.STRING },
+                soundDescription: { type: Type.STRING }
+            },
+            required: ["code", "explanation", "soundDescription"]
+         }
+       }
+     });
+     
+     const text = response.text;
+     if (!text) throw new Error("No response from AI");
+     return JSON.parse(text) as GeneratedCode;
+   } catch (error) {
+     console.error("Text Gen Error:", error);
+     throw error;
+   }
+};
+
 export const refineCodeWithPrompt = async (currentCode: string, userInstruction: string): Promise<GeneratedCode> => {
-   const modelId = "gemini-3-pro-preview";
-   
    const prompt = `
-     Here is an existing Web Audio API code snippet:
+     Here is an existing Web Audio API code snippet (body only):
      \`\`\`javascript
      ${currentCode}
      \`\`\`
      
      The user wants to modify it: "${userInstruction}".
      
-     Return the updated JSON with 'code' and 'explanation'. Ensure the function signature 'playEffect(ctx, destination)' remains.
+     Return the updated JSON with 'code' and 'explanation'. Ensure the code is still the BODY of the function.
    `;
 
    try {
      const response = await ai.models.generateContent({
-       model: modelId,
+       model: MODEL_ID,
        contents: prompt,
        config: {
          responseMimeType: "application/json",

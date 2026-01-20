@@ -13,6 +13,17 @@ export interface SynthParams {
 export interface GeneratedCode {
   code: string;
   explanation: string;
+  soundDescription?: string;
+  synthParams?: SynthParams;
+}
+
+export interface LibraryItem {
+  id: string;
+  title: string;
+  code: string;
+  description: string;
+  notes: string;
+  timestamp: number;
 }
 
 export enum AppMode {

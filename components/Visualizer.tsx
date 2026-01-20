@@ -11,33 +11,40 @@ const Visualizer: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Use a user interaction check wrapper if needed, 
-    // but here we assume AudioContext might be resumed elsewhere.
     const analyser = getAnalyser();
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
     let animationId: number;
 
-    const draw = () => {
-      animationId = requestAnimationFrame(draw);
+    const render = () => {
+      animationId = requestAnimationFrame(render);
 
+      // Handle resize explicitly for sharp rendering
+      if (canvas.parentElement && canvas.width !== canvas.parentElement.offsetWidth) {
+          canvas.width = canvas.parentElement.offsetWidth;
+          canvas.height = canvas.parentElement.offsetHeight;
+      }
+      const w = canvas.width;
+      const h = canvas.height;
+      
       analyser.getByteTimeDomainData(dataArray);
 
-      // Clear with transparency for trail effect? No, clean wipe for scope.
-      ctx.fillStyle = '#0f172a'; // Match bg
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Clear
+      ctx.clearRect(0, 0, w, h);
 
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#22d3ee'; // Cyan-400
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#33ccff'; // Neon Accent
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#33ccff';
       ctx.beginPath();
 
-      const sliceWidth = canvas.width / bufferLength;
+      const sliceWidth = w * 1.0 / bufferLength;
       let x = 0;
 
       for (let i = 0; i < bufferLength; i++) {
         const v = dataArray[i] / 128.0;
-        const y = (v * canvas.height) / 2;
+        const y = v * h / 2;
 
         if (i === 0) {
           ctx.moveTo(x, y);
@@ -48,11 +55,11 @@ const Visualizer: React.FC = () => {
         x += sliceWidth;
       }
 
-      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.lineTo(w, h / 2);
       ctx.stroke();
     };
 
-    draw();
+    render();
 
     return () => {
       cancelAnimationFrame(animationId);
@@ -60,14 +67,12 @@ const Visualizer: React.FC = () => {
   }, []);
 
   return (
-    <div className="w-full h-32 bg-slate-900 rounded-lg overflow-hidden border border-slate-700 shadow-inner relative">
-      <canvas 
-        ref={canvasRef} 
-        width={800} 
-        height={200} 
-        className="w-full h-full block"
-      />
-      <div className="absolute top-2 right-2 text-xs text-slate-500 font-mono">OSCILLOSCOPE</div>
+    <div className="w-full h-full bg-black border border-gray-800 relative overflow-hidden">
+        <div className="crt-overlay"></div>
+         <div className="absolute top-2 left-3 text-xs text-[#33ccff] font-bold tracking-widest pointer-events-none uppercase z-20 opacity-80">
+            Oscilloscope // Signal Feed
+        </div>
+        <canvas ref={canvasRef} className="w-full h-full opacity-90 relative z-0"></canvas>
     </div>
   );
 };
