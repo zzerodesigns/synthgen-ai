@@ -878,7 +878,7 @@ osc.stop(ctx.currentTime + 2.1);`;
 
                         <div className="w-1/4 flex flex-col items-end gap-1">
                             <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                                v2.0.3 // <span className="text-[#33ccff]">ONLINE</span>
+                                v2.0.4 // <span className="text-[#33ccff]">ONLINE</span>
                             </div>
                         </div>
                     </header>
@@ -902,7 +902,7 @@ osc.stop(ctx.currentTime + 2.1);`;
                     </div>
 
                     {/* MAIN WORKSPACE */}
-                    <div ref={workspaceRef} className="flex flex-grow overflow-hidden z-10 relative gap-4">
+                    <div ref={workspaceRef} className="flex flex-grow overflow-hidden z-10 relative">
                         {/* LEFT PANEL */}
                         <div className="glass-panel relative flex flex-col" style={{ flexBasis: `${leftPanelWidth}%` }}>
                             <div className="flex h-12 border-b border-white/10 bg-black/40 relative z-20 items-center px-4">
@@ -1044,6 +1044,7 @@ osc.stop(ctx.currentTime + 2.1);`;
                                                     className="w-full bg-black/50 border border-slate-700 px-4 text-sm font-mono text-white focus:border-[#33ccff] outline-none placeholder-slate-600"
                                                     placeholder="e.g. 'Retro laser jump'"
                                                     value={userPrompt}
+                                                    onKeyDown={(e) => e.key === 'Enter' && handleTextGen()}
                                                     onChange={e => setUserPrompt(e.target.value)}
                                                 />
                                                 <button onClick={handleTextGen} disabled={isLoading} className="cyber-btn px-6 text-sm font-bold">GEN</button>
