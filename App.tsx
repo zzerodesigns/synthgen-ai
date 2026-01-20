@@ -321,7 +321,7 @@ const App: React.FC = () => {
 
                 <div className="w-1/4 flex flex-col items-end gap-1">
                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                        v2.0 // <span className="text-[#33ccff]">ONLINE</span>
+                        v2.0.1 // <span className="text-[#33ccff]">ONLINE</span>
                     </div>
                 </div>
             </header>
