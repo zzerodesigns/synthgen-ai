@@ -252,6 +252,17 @@
         .animate-bounce-vertical {
             animation: bounce-vertical 3s ease-in-out infinite alternate; /* Slower 3s duration */
         }
+        
+        /* Loading Scan Animation for System Msg */
+        @keyframes scan-line {
+            0% { background-position: -100% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .animate-scan {
+            background: linear-gradient(90deg, rgba(5,10,16,0.2) 25%, rgba(51, 204, 255, 0.15) 50%, rgba(5,10,16,0.2) 75%);
+            background-size: 200% 100%;
+            animation: scan-line 2s infinite linear;
+        }
     </style>
   <script type="importmap">
 {
@@ -284,6 +295,239 @@
             MANUAL: 'MANUAL',
             AI_CLONE: 'AI_CLONE'
         };
+
+        // --- PRESETS ---
+        const FACTORY_PRESETS = [
+            {
+                title: "Laser Shot",
+                description: "Sharp retro sci-fi laser zap using a fast frequency sweep.",
+                code: `const osc = ctx.createOscillator();
+const gain = ctx.createGain();
+
+osc.type = 'sawtooth';
+osc.frequency.setValueAtTime(880, ctx.currentTime);
+osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.25);
+
+gain.gain.setValueAtTime(0.3, ctx.currentTime);
+gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+
+osc.connect(gain);
+gain.connect(destination);
+
+osc.start();
+osc.stop(ctx.currentTime + 0.3);`
+            },
+            {
+                title: "Explosion",
+                description: "Deep rumble explosion generated with white noise and low-pass filtering.",
+                code: `const bufferSize = ctx.sampleRate * 2;
+const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+const data = buffer.getChannelData(0);
+
+for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+}
+
+const noise = ctx.createBufferSource();
+noise.buffer = buffer;
+
+const filter = ctx.createBiquadFilter();
+filter.type = 'lowpass';
+filter.frequency.setValueAtTime(1000, ctx.currentTime);
+filter.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 1.5);
+
+const gain = ctx.createGain();
+gain.gain.setValueAtTime(1, ctx.currentTime);
+gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.5);
+
+noise.connect(filter);
+filter.connect(gain);
+gain.connect(destination);
+
+noise.start();
+noise.stop(ctx.currentTime + 2);`
+            },
+            {
+                title: "UI Click",
+                description: "Clean, high-pitched interface selection click.",
+                code: `const osc = ctx.createOscillator();
+const gain = ctx.createGain();
+
+osc.type = 'sine';
+osc.frequency.setValueAtTime(1200, ctx.currentTime);
+osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.05);
+
+gain.gain.setValueAtTime(0.3, ctx.currentTime);
+gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+
+osc.connect(gain);
+gain.connect(destination);
+
+osc.start();
+osc.stop(ctx.currentTime + 0.06);`
+            },
+            {
+                title: "Ambient Pad",
+                description: "Soft, detuned sawtooth pad with slow attack and long release.",
+                code: `const osc1 = ctx.createOscillator();
+const osc2 = ctx.createOscillator();
+const gain = ctx.createGain();
+
+osc1.type = 'sawtooth';
+osc1.frequency.value = 220; // A3
+
+osc2.type = 'sawtooth';
+osc2.frequency.value = 221.5; // Slight detune
+
+gain.gain.setValueAtTime(0, ctx.currentTime);
+gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 1.0); // Attack
+gain.gain.setValueAtTime(0.2, ctx.currentTime + 2.0); // Sustain
+gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 4.0); // Release
+
+osc1.connect(gain);
+osc2.connect(gain);
+gain.connect(destination);
+
+osc1.start();
+osc2.start();
+osc1.stop(ctx.currentTime + 4.1);
+osc2.stop(ctx.currentTime + 4.1);`
+            },
+            {
+                title: "Bass Drop",
+                description: "Heavy sub-bass sine wave sweeping from 150Hz to 30Hz.",
+                code: `const osc = ctx.createOscillator();
+const gain = ctx.createGain();
+
+osc.type = 'sine';
+osc.frequency.setValueAtTime(150, ctx.currentTime);
+osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 1.5);
+
+gain.gain.setValueAtTime(0.8, ctx.currentTime);
+gain.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 1.0);
+gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5);
+
+osc.connect(gain);
+gain.connect(destination);
+
+osc.start();
+osc.stop(ctx.currentTime + 1.6);`
+            },
+            {
+                title: "Synth Lead",
+                description: "Square wave lead with LFO-driven vibrato.",
+                code: `const osc = ctx.createOscillator();
+const lfo = ctx.createOscillator();
+const lfoGain = ctx.createGain();
+const gain = ctx.createGain();
+
+osc.type = 'square';
+osc.frequency.value = 440;
+
+lfo.type = 'sine';
+lfo.frequency.value = 5; // 5Hz vibrato rate
+lfoGain.gain.value = 10; // Vibrato depth
+
+lfo.connect(lfoGain);
+lfoGain.connect(osc.frequency);
+
+gain.gain.setValueAtTime(0, ctx.currentTime);
+gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+gain.gain.setValueAtTime(0.3, ctx.currentTime + 1.5);
+gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.0);
+
+osc.connect(gain);
+gain.connect(destination);
+
+osc.start();
+lfo.start();
+osc.stop(ctx.currentTime + 2.1);
+lfo.stop(ctx.currentTime + 2.1);`
+            },
+            {
+                title: "Drone",
+                description: "Dark, slowly modulating cinematic drone tone.",
+                code: `const carrier = ctx.createOscillator();
+const modulator = ctx.createOscillator();
+const modGain = ctx.createGain();
+const masterGain = ctx.createGain();
+
+carrier.type = 'triangle';
+carrier.frequency.value = 55; // Low A
+
+modulator.type = 'sine';
+modulator.frequency.value = 0.5; // Slow modulation
+modGain.gain.value = 20;
+
+modulator.connect(modGain);
+modGain.connect(carrier.frequency);
+
+masterGain.gain.setValueAtTime(0, ctx.currentTime);
+masterGain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 2.0);
+masterGain.gain.setValueAtTime(0.4, ctx.currentTime + 4.0);
+masterGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 6.0);
+
+carrier.connect(masterGain);
+masterGain.connect(destination);
+
+carrier.start();
+modulator.start();
+carrier.stop(ctx.currentTime + 6.1);
+modulator.stop(ctx.currentTime + 6.1);`
+            },
+            {
+                title: "Bell",
+                description: "Metallic bell sound created with FM synthesis (2:1 ratio).",
+                code: `const carrier = ctx.createOscillator();
+const modulator = ctx.createOscillator();
+const modGain = ctx.createGain();
+const env = ctx.createGain();
+
+carrier.type = 'sine';
+carrier.frequency.value = 800;
+
+modulator.type = 'sine';
+modulator.frequency.value = 1600; // 2:1 ratio
+modGain.gain.setValueAtTime(1000, ctx.currentTime);
+modGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.5);
+
+modulator.connect(modGain);
+modGain.connect(carrier.frequency);
+
+env.gain.setValueAtTime(0, ctx.currentTime);
+env.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.01);
+env.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.0);
+
+carrier.connect(env);
+env.connect(destination);
+
+carrier.start();
+modulator.start();
+carrier.stop(ctx.currentTime + 2.1);
+modulator.stop(ctx.currentTime + 2.1);`
+            },
+            {
+                title: "Sci-Fi Alarm",
+                description: "Urgent two-tone square wave alarm alternating pitch.",
+                code: `const osc = ctx.createOscillator();
+const gain = ctx.createGain();
+
+osc.type = 'square';
+osc.frequency.setValueAtTime(880, ctx.currentTime);
+osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.2);
+osc.frequency.setValueAtTime(880, ctx.currentTime + 0.4);
+osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.6);
+osc.frequency.setValueAtTime(880, ctx.currentTime + 0.8);
+
+gain.gain.value = 0.2;
+
+osc.connect(gain);
+gain.connect(destination);
+
+osc.start();
+osc.stop(ctx.currentTime + 1.0);`
+            }
+        ];
 
         // --- SERVICES: AUDIO UTILS ---
         let audioCtx = null;
@@ -707,6 +951,17 @@ osc.stop(ctx.currentTime + 2.1);`;
                 const saved = localStorage.getItem('synthgen_library');
                 if (saved) {
                     try { setLibrary(JSON.parse(saved)); } catch(e) {}
+                } else {
+                    // Populate factory presets if library is empty
+                    const defaults = FACTORY_PRESETS.map(p => ({
+                        id: crypto.randomUUID(),
+                        title: p.title,
+                        code: p.code,
+                        description: p.description,
+                        notes: "Factory Preset",
+                        timestamp: Date.now()
+                    }));
+                    setLibrary(defaults);
                 }
 
                 // Restore API Key
@@ -992,7 +1247,7 @@ osc.stop(ctx.currentTime + 2.1);`;
                                 <Key size={16} />
                             </button>
                             <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                                v2.0.8 // <span className="text-[#33ccff]">ONLINE</span>
+                                v2.0.9 // <span className="text-[#33ccff]">ONLINE</span>
                             </div>
                         </div>
                     </header>
@@ -1265,8 +1520,14 @@ osc.stop(ctx.currentTime + 2.1);`;
                                     <div className="flex-grow flex flex-col px-4 pt-3 pb-6 overflow-hidden gap-3">
                                         
                                         {/* System Message Log */}
-                                        <div className="text-[10px] font-mono text-slate-400 p-3 bg-black/20 border border-slate-800 rounded leading-relaxed flex-shrink-0 min-h-[40px] max-h-32 overflow-y-auto custom-scrollbar shadow-inner">
-                                            <span className="text-[#33ccff] font-bold">SYSTEM_MSG:</span> {explanation}
+                                        <div className={`text-[10px] font-mono p-3 rounded leading-relaxed flex-shrink-0 min-h-[40px] max-h-32 overflow-y-auto custom-scrollbar shadow-inner transition-all duration-500 relative overflow-hidden ${
+                                            isLoading 
+                                            ? 'bg-[#33ccff]/10 border border-[#33ccff]/40 text-[#33ccff] shadow-[0_0_20px_rgba(51,204,255,0.2)] animate-scan' 
+                                            : 'bg-black/20 border border-slate-800 text-slate-400'
+                                        }`}>
+                                            <div className="relative z-10">
+                                                <span className="text-[#33ccff] font-bold">SYSTEM_MSG:</span> {explanation}
+                                            </div>
                                         </div>
 
                                         {/* AI Prompt Generator - Expands to fill space */}
