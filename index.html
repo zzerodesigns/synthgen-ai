@@ -255,8 +255,8 @@
         
         /* Loading Scan Animation for System Msg */
         @keyframes scan-line {
-            0% { background-position: -100% 0; }
-            100% { background-position: 200% 0; }
+            0% { background-position: 200% 0; }
+            100% { background-position: 0% 0; }
         }
         .animate-scan {
             background: linear-gradient(90deg, rgba(5,10,16,0.2) 25%, rgba(51, 204, 255, 0.15) 50%, rgba(5,10,16,0.2) 75%);
@@ -535,17 +535,27 @@ osc.stop(ctx.currentTime + 1.0);`
         let analyser = null;
 
         const getAudioContext = () => {
-            if (!audioCtx) {
+            if (!audioCtx || audioCtx.state === 'closed') {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
             return audioCtx;
+        };
+
+        // NUCLEAR OPTION: Kills all sound by destroying the context
+        const stopAudio = async () => {
+            if (audioCtx && audioCtx.state !== 'closed') {
+                await audioCtx.close();
+                audioCtx = null;
+                masterGain = null;
+                analyser = null;
+            }
         };
 
         const getMasterGain = () => {
             const ctx = getAudioContext();
             if (!masterGain) {
                 masterGain = ctx.createGain();
-                masterGain.gain.value = 0.5; // Default master volume
+                masterGain.gain.value = 0.5;
                 masterGain.connect(ctx.destination);
             }
             return masterGain;
@@ -554,7 +564,6 @@ osc.stop(ctx.currentTime + 1.0);`
         const setMasterVolume = (val) => {
             const ctx = getAudioContext();
             const master = getMasterGain();
-            // Smooth transition to avoid clicks
             master.gain.setTargetAtTime(val, ctx.currentTime, 0.1);
         };
 
@@ -564,7 +573,7 @@ osc.stop(ctx.currentTime + 1.0);`
             if (!analyser) {
                 analyser = ctx.createAnalyser();
                 analyser.fftSize = 2048;
-                master.disconnect(); // Disconnect from destination to insert analyser
+                master.disconnect();
                 master.connect(analyser);
                 analyser.connect(ctx.destination);
             }
@@ -585,7 +594,6 @@ osc.stop(ctx.currentTime + 1.0);`
             filter.type = params.filterType;
             filter.frequency.value = params.filterFreq;
 
-            // Envelope
             const now = ctx.currentTime;
             const { attack, decay, sustain, release } = params;
 
@@ -606,10 +614,12 @@ osc.stop(ctx.currentTime + 1.0);`
             try {
                 const ctx = getAudioContext();
                 const master = getMasterGain();
+                
+                // Ensure context is running (needed if we just recreated it)
+                if (ctx.state === 'suspended') ctx.resume();
 
                 const runnable = new Function('ctx', 'destination', `
                 ${code}
-                // Attempt to call playEffect if the user defined it, otherwise assume code ran immediately
                 if (typeof playEffect === 'function') {
                     playEffect(ctx, destination);
                 }
@@ -628,7 +638,6 @@ osc.stop(ctx.currentTime + 1.0);`
                 reader.readAsDataURL(file);
                 reader.onload = () => {
                     const result = reader.result;
-                    // Remove data URL prefix
                     const base64 = result.split(',')[1];
                     resolve(base64);
                 };
@@ -637,9 +646,13 @@ osc.stop(ctx.currentTime + 1.0);`
         };
 
         // --- SERVICES: GEMINI SERVICE ---
-        const MODEL_ID = "gemini-3-flash-preview";
+        const AVAILABLE_MODELS = [
+            { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Recommended - Balanced)" },
+            { id: "gemini-flash-latest", label: "Gemini Flash Latest (Dynamic)" },
+            { id: "gemini-3-flash-preview", label: "Gemini 3.0 Flash Preview (Experimental)" },
+            { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash (Legacy Fallback)" }
+        ];
 
-        // Helper to get fresh AI instance
         const getAI = () => {
             const key = window.process.env.API_KEY || localStorage.getItem('gemini_api_key');
             if (!key || key.length < 10) {
@@ -648,7 +661,7 @@ osc.stop(ctx.currentTime + 1.0);`
             return new GoogleGenAI({ apiKey: key });
         };
 
-        const generateSynthCodeFromAudio = async (base64Audio, mimeType) => {
+        const generateSynthCodeFromAudio = async (base64Audio, mimeType, modelId) => {
             const systemInstruction = `
                 You are an expert Audio DSP Engineer.
                 Return ONLY valid JSON. Structure:
@@ -668,8 +681,10 @@ osc.stop(ctx.currentTime + 1.0);`
 
             try {
                 const ai = getAI();
+                const targetModel = modelId || "gemini-2.0-flash";
+                
                 const response = await ai.models.generateContent({
-                model: MODEL_ID,
+                model: targetModel,
                 contents: {
                     parts: [
                     {
@@ -698,7 +713,8 @@ osc.stop(ctx.currentTime + 1.0);`
                 }
                 });
 
-                const text = response.text;
+                // FIX: Accessed as property, not function
+                const text = response.text; 
                 if (!text) throw new Error("No response from AI");
                 
                 return JSON.parse(text);
@@ -709,7 +725,7 @@ osc.stop(ctx.currentTime + 1.0);`
             }
         };
 
-        const generateSynthCodeFromText = async (description, currentParams) => {
+        const generateSynthCodeFromText = async (description, currentParams, modelId) => {
             const systemInstruction = `
                 You are an expert Web Audio API Developer.
                 Return ONLY valid JSON. Structure:
@@ -724,8 +740,10 @@ osc.stop(ctx.currentTime + 1.0);`
 
             try {
                 const ai = getAI();
+                const targetModel = modelId || "gemini-2.0-flash";
+
                 const response = await ai.models.generateContent({
-                model: MODEL_ID,
+                model: targetModel,
                 contents: `Generate Web Audio API code to create this sound: "${description}". 
                 Consider manual synth settings if relevant: ${currentParams ? JSON.stringify(currentParams) : 'none'}`,
                 config: {
@@ -743,6 +761,7 @@ osc.stop(ctx.currentTime + 1.0);`
                 }
                 });
                 
+                // FIX: Accessed as property
                 const text = response.text;
                 if (!text) throw new Error("No response from AI");
                 return JSON.parse(text);
@@ -752,7 +771,7 @@ osc.stop(ctx.currentTime + 1.0);`
             }
         };
 
-        const refineCodeWithPrompt = async (currentCode, userInstruction) => {
+        const refineCodeWithPrompt = async (currentCode, userInstruction, modelId) => {
             const prompt = `
                 Here is an existing Web Audio API code snippet (body only):
                 \`\`\`javascript
@@ -766,8 +785,10 @@ osc.stop(ctx.currentTime + 1.0);`
 
             try {
                 const ai = getAI();
+                const targetModel = modelId || "gemini-2.0-flash";
+
                 const response = await ai.models.generateContent({
-                model: MODEL_ID,
+                model: targetModel,
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -781,6 +802,7 @@ osc.stop(ctx.currentTime + 1.0);`
                 }
                 });
                 
+                // FIX: Accessed as property
                 const text = response.text;
                 if (!text) throw new Error("No response from AI");
                 return JSON.parse(text);
@@ -801,47 +823,49 @@ osc.stop(ctx.currentTime + 1.0);`
                 const ctx = canvas.getContext('2d');
                 if (!ctx) return;
 
-                const analyser = getAnalyser();
-                const bufferLength = analyser.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
-
+                // Fixed buffer size for visualization
+                const dataArray = new Uint8Array(1024);
                 let animationId;
 
                 const render = () => {
                     animationId = requestAnimationFrame(render);
 
-                    // Handle resize explicitly for sharp rendering
+                    // Handle resize
                     if (canvas.parentElement && canvas.width !== canvas.parentElement.offsetWidth) {
                         canvas.width = canvas.parentElement.offsetWidth;
                         canvas.height = canvas.parentElement.offsetHeight;
                     }
                     const w = canvas.width;
                     const h = canvas.height;
-                    
-                    analyser.getByteTimeDomainData(dataArray);
+
+                    // LIVE FIX: Always get the current analyzer instance 
+                    // This ensures it works even after AudioContext is reset/stopped
+                    const currentAnalyser = getAnalyser(); 
+                    if (currentAnalyser) {
+                        currentAnalyser.getByteTimeDomainData(dataArray);
+                    }
 
                     // Clear
                     ctx.clearRect(0, 0, w, h);
 
                     ctx.lineWidth = 3;
-                    ctx.strokeStyle = '#33ccff'; // Neon Accent
+                    ctx.strokeStyle = '#33ccff';
                     ctx.shadowBlur = 8;
                     ctx.shadowColor = '#33ccff';
                     ctx.beginPath();
 
-                    const sliceWidth = w * 1.0 / bufferLength;
+                    const sliceWidth = w * 1.0 / 1024;
                     let x = 0;
 
-                    for (let i = 0; i < bufferLength; i++) {
+                    for (let i = 0; i < 1024; i++) {
                         const v = dataArray[i] / 128.0;
                         const y = v * h / 2;
 
                         if (i === 0) {
-                        ctx.moveTo(x, y);
+                            ctx.moveTo(x, y);
                         } else {
-                        ctx.lineTo(x, y);
+                            ctx.lineTo(x, y);
                         }
-
                         x += sliceWidth;
                     }
 
@@ -850,10 +874,7 @@ osc.stop(ctx.currentTime + 1.0);`
                 };
 
                 render();
-
-                return () => {
-                    cancelAnimationFrame(animationId);
-                };
+                return () => cancelAnimationFrame(animationId);
             }, []);
 
             return (
@@ -928,6 +949,8 @@ osc.stop(ctx.currentTime + 2.1);`;
             // API Key Management
             const [showKeyModal, setShowKeyModal] = useState(false);
             const [tempKey, setTempKey] = useState("");
+            // Model Selection State
+            const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
 
             const [synthParams, setSynthParams] = useState({
                 waveType: 'triangle',
@@ -969,6 +992,11 @@ osc.stop(ctx.currentTime + 2.1);`;
                 if (savedKey) {
                     window.process.env.API_KEY = savedKey;
                     setTempKey(savedKey);
+                }
+                // Restore Model Selection
+                const savedModel = localStorage.getItem('gemini_model_pref');
+                if (savedModel) {
+                    setSelectedModel(savedModel);
                 }
             }, []);
 
@@ -1031,12 +1059,14 @@ osc.stop(ctx.currentTime + 2.1);`;
                 };
             }, [isDraggingVertical]);
 
-            const addToLibrary = (code, desc, title = "Generated Sound") => {
+            const addToLibrary = (code, desc, title, modelId, originalPrompt) => {
                 const newItem = {
                     id: crypto.randomUUID(),
-                    title: title,
+                    title: title || "Generated Sound",
                     code: code,
                     description: desc,
+                    model: modelId || "Unknown",
+                    prompt: originalPrompt || "Manual/Unknown",
                     notes: "",
                     timestamp: Date.now()
                 };
@@ -1102,19 +1132,22 @@ osc.stop(ctx.currentTime + 2.1);`;
             const playLibraryItem = (item) => {
                 if (playingId === item.id) {
                     setPlayingId(null);
-                    getAudioContext().suspend(); 
-                    setTimeout(() => getAudioContext().resume(), 50);
+                    stopAudio();
                 } else {
-                    getAudioContext().resume();
-                    executeGeneratedCode(item.code);
-                    setPlayingId(item.id);
-                    setTimeout(() => setPlayingId(null), 2000); 
+                    stopAudio().then(() => { 
+                        getAudioContext(); // Re-init
+                        setPlayingId(item.id);
+                        executeGeneratedCode(item.code);
+                        setTimeout(() => {
+                            setPlayingId(prev => prev === item.id ? null : prev);
+                        }, 3000); 
+                    });
                 }
             };
 
             const loadIntoEditor = (item) => {
                 setGeneratedCode(item.code);
-                setExplanation(`Loaded module: ${item.title}`);
+                setExplanation(`Loaded: "${item.title}" | Model: ${item.model || 'Legacy'} | Source: "${item.prompt || 'Unknown'}"`);
             };
 
             const updateVolume = (val) => {
@@ -1131,10 +1164,12 @@ osc.stop(ctx.currentTime + 2.1);`;
                 setExplanation("Uploading & Analyzing Audio...");
                 try {
                     const base64 = await fileToBase64(file);
-                    const result = await generateSynthCodeFromAudio(base64, file.type);
+                    // Pass selectedModel
+                    const result = await generateSynthCodeFromAudio(base64, file.type, selectedModel);
                     setGeneratedCode(result.code);
                     setExplanation("Analysis complete. Code generated from source audio.");
-                    addToLibrary(result.code, result.explanation, file.name || "Imported Audio");
+                    // Add to library with metadata
+                    addToLibrary(result.code, result.explanation, file.name || "Imported Audio", selectedModel, "Audio Analysis");
                 } catch (error) {
                     setExplanation("Analysis Failed: " + error.message);
                 } finally {
@@ -1147,10 +1182,10 @@ osc.stop(ctx.currentTime + 2.1);`;
                 setIsLoading(true);
                 setExplanation("Generating synthesis parameters...");
                 try {
-                    const result = await generateSynthCodeFromText(userPrompt, synthParams);
+                    const result = await generateSynthCodeFromText(userPrompt, synthParams, selectedModel);
                     setGeneratedCode(result.code);
                     setExplanation("Generation complete. Module ready.");
-                    addToLibrary(result.code, result.explanation, userPrompt);
+                    addToLibrary(result.code, result.explanation, userPrompt, selectedModel, userPrompt);
                 } catch (error) {
                     setExplanation("Generation Failed: " + error.message);
                 } finally {
@@ -1163,15 +1198,14 @@ osc.stop(ctx.currentTime + 2.1);`;
                 setIsLoading(true);
                 setExplanation("Refining module logic...");
                 try {
-                    const result = await refineCodeWithPrompt(generatedCode, refinePrompt);
+                    const result = await refineCodeWithPrompt(generatedCode, refinePrompt, selectedModel);
                     setGeneratedCode(result.code);
                     setExplanation("Refinement applied.");
                     
                     const timestamp = new Date().toLocaleTimeString();
                     const refineTitle = `Refined: ${refinePrompt.slice(0, 15)}... (${timestamp})`;
                     
-                    addToLibrary(result.code, result.explanation, refineTitle);
-                    
+                    addToLibrary(result.code, result.explanation, refineTitle, selectedModel, `Refined: ${refinePrompt}`);
                     setRefinePrompt("");
                 } catch (error) {
                     setExplanation("Refinement Failed: " + error.message);
@@ -1247,7 +1281,7 @@ osc.stop(ctx.currentTime + 2.1);`;
                                 <Key size={16} />
                             </button>
                             <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                                v2.0.9 // <span className="text-[#33ccff]">ONLINE</span>
+                                v2.1.0 // <span className="text-[#33ccff]">ONLINE</span>
                             </div>
                         </div>
                     </header>
@@ -1273,16 +1307,17 @@ osc.stop(ctx.currentTime + 2.1);`;
                     {/* MAIN WORKSPACE */}
                     <div ref={workspaceRef} className="flex flex-grow overflow-hidden z-10 relative">
                         {/* LEFT PANEL */}
-                        <div className="glass-panel relative flex flex-col" style={{ flexBasis: `${leftPanelWidth}%` }}>
-                            <div className="flex h-12 border-b border-white/10 bg-black/40 relative z-20 items-center px-4">
-                                <h2 className="text-white font-semibold text-xs uppercase tracking-wide flex items-center gap-3">
-                                    <span className="w-1.5 h-1.5 bg-[#33ccff] rounded-full"></span>
-                                    {mode === AppMode.AI_CLONE ? 'Audio Library' : 'Synthesizer Controls'}
-                                </h2>
-                                {mode === AppMode.AI_CLONE && (
-                                    <span className="ml-auto text-[10px] text-slate-500 font-mono">{library.length} ITEMS</span>
-                                )}
-                            </div>
+                            <div className="glass-panel relative flex flex-col" style={{ flexBasis: `${leftPanelWidth}%` }}>
+                                {/* Header aligned to match right panel: h-12, px-6, items-center */}
+                                <div className="flex h-12 border-b border-white/10 bg-black/40 relative z-20 items-center justify-between px-6 flex-shrink-0">
+                                    <h2 className="text-white font-semibold text-xs uppercase tracking-wide flex items-center gap-3">
+                                        <span className="w-1.5 h-1.5 bg-[#33ccff] rounded-full"></span>
+                                        {mode === AppMode.AI_CLONE ? 'Audio Library' : 'Synthesizer Controls'}
+                                    </h2>
+                                    {mode === AppMode.AI_CLONE && (
+                                        <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">{library.length} Items</span>
+                                    )}
+                                </div>
 
                             <div className="overflow-y-auto custom-scrollbar flex flex-col flex-grow bg-[#080c10]">
                                 {mode === AppMode.AI_CLONE ? (
@@ -1352,8 +1387,16 @@ osc.stop(ctx.currentTime + 2.1);`;
                                                                         placeholder="Untitled Sound"
                                                                     />
                                                                 </div>
-                                                                <div className="text-[10px] text-slate-500 font-mono truncate w-full">
-                                                                    {new Date(item.timestamp).toLocaleTimeString()}
+                                                                <div className="text-[10px] text-slate-500 font-mono truncate w-full flex gap-2">
+                                                                    <span>{new Date(item.timestamp).toLocaleTimeString()}</span>
+                                                                    {item.model && (
+                                                                        <>
+                                                                            <span className="text-slate-700">|</span>
+                                                                            <span className="text-slate-400" title={item.model}>
+                                                                                {item.model.replace('gemini-', '').replace('flash', 'FL').toUpperCase()}
+                                                                            </span>
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                             </div>
 
@@ -1520,13 +1563,23 @@ osc.stop(ctx.currentTime + 2.1);`;
                                     <div className="flex-grow flex flex-col px-4 pt-3 pb-6 overflow-hidden gap-3">
                                         
                                         {/* System Message Log */}
-                                        <div className={`text-[10px] font-mono p-3 rounded leading-relaxed flex-shrink-0 min-h-[40px] max-h-32 overflow-y-auto custom-scrollbar shadow-inner transition-all duration-500 relative overflow-hidden ${
+                                        <div className={`text-[10px] font-mono p-3 rounded leading-relaxed flex-shrink-0 min-h-[40px] max-h-32 overflow-y-auto custom-scrollbar shadow-inner transition-all duration-500 relative group overflow-hidden ${
                                             isLoading 
                                             ? 'bg-[#33ccff]/10 border border-[#33ccff]/40 text-[#33ccff] shadow-[0_0_20px_rgba(51,204,255,0.2)] animate-scan' 
                                             : 'bg-black/20 border border-slate-800 text-slate-400'
                                         }`}>
-                                            <div className="relative z-10">
+                                            <div className="relative z-10 pr-8">
                                                 <span className="text-[#33ccff] font-bold">SYSTEM_MSG:</span> {explanation}
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation(); // Prevents bubbling issues
+                                                        navigator.clipboard.writeText(explanation);
+                                                    }}
+                                                    className="absolute -top-1 -right-1 p-1.5 text-slate-500 hover:text-[#33ccff] hover:bg-black/50 rounded transition-all cursor-pointer z-50"
+                                                    title="Copy Log"
+                                                >
+                                                    <Copy size={12} />
+                                                </button>
                                             </div>
                                         </div>
 
@@ -1592,6 +1645,30 @@ osc.stop(ctx.currentTime + 2.1);`;
                                     Initialize connection with Google Gemini API. <br/>
                                     <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-white hover:text-[#33ccff] underline decoration-dotted">Get your API Key here</a>.
                                 </p>
+                                <div className="mb-4">
+                                    <label className="text-[10px] text-[#33ccff] font-bold uppercase tracking-wider mb-2 block">
+                                        Select Logic Engine
+                                    </label>
+                                    <div className="relative">
+                                        <select 
+                                            value={selectedModel}
+                                            onChange={(e) => {
+                                                setSelectedModel(e.target.value);
+                                                localStorage.setItem('gemini_model_pref', e.target.value);
+                                            }}
+                                            className="w-full bg-black/50 border border-slate-700 text-xs text-white p-3 focus:border-[#33ccff] outline-none font-mono appearance-none"
+                                        >
+                                            {AVAILABLE_MODELS.map(m => (
+                                                <option key={m.id} value={m.id}>
+                                                    {m.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                            <ChevronDown size={14} />
+                                        </div>
+                                    </div>
+                                </div>
                                 <input 
                                     type="password" 
                                     value={tempKey}
@@ -1602,6 +1679,7 @@ osc.stop(ctx.currentTime + 2.1);`;
                                 <button onClick={saveApiKey} className="cyber-btn w-full py-2 text-xs font-bold">ESTABLISH UPLINK</button>
                             </div>
                         </div>
+                        
                     )}
                 </div>
             );
